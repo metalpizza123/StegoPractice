@@ -2,9 +2,10 @@ import sys
 import tkinter
 from tkinter import filedialog
 from tkinter import messagebox
-
+import secrets
 import cv2
 import numpy
+from cryptography.fernet import Fernet
 
 def selectHost():
     #Ask for image name
@@ -82,11 +83,15 @@ def decimalByteToBinaryList(x):
     #NOTE-returns a list of binary int, 7 items.
     return intBINlist
 
-def encodeText(inputListDecimalByte):
+def encodeText(inputCharList):
+    #takes list of decimal values, converts them to list of bits
     bitList = []
-    for x in inputListDecimalByte:
-        bitList.append(decimalByteToBinaryList(ord(x)))
-    return bitList
+    for x in inputCharList:
+        bitList.append(ord(x))
+    binaryList=[]
+    for y in bitList:
+        binaryList.append(decimalByteToBinaryList(y))
+    return binaryList
 
 def hideText(inputImage,inputTextList):
     #It's not a list of text... necessarily. it's a list of chars coded in ASCII binary
@@ -127,7 +132,7 @@ def hideText(inputImage,inputTextList):
     return outputImage
 
 def saveImage(outputImage):
-    saveName = filedialog.asksaveasfilename(initialdir = "./", title='Save file as', initialfile='output.png',
+    saveName = filedialog.asksaveasfilename(initialdir = "./", title='Save image file as', initialfile='output.png',
                                             defaultextension=".png", filetypes=[('PNG',"*.png")])
     if saveName is None: # asksaveasfile return `None` if dialog closed with "cancel".
         noSaveFileChosen=messagebox.askyesno("No save location chosen",
@@ -145,18 +150,40 @@ def hasAlpha(inputImage):
     else:
         return False
 
-def checkSize(inputImage, bitText):
+def checkSize(inputImage, token):
     imageH, imageW = inputImage.shape[:2]
     charCapacity = (imageH * imageW * 3)
-    charAmount=(len(bitText)*7)+7
+    #Then divide this by 2 since our encrpytion method takes x bit inputs, returns 2x bit out
+    charCapacity = charCapacity//2
+    
+    charAmount=((len(token))*7)+7
     #The +7 at the end is for inserting the ending char, ASCII value 0
     if (charAmount > charCapacity):
         noChosenFile = messagebox.showerror("Message too large",
                                            "The chosen message is too large to hide in the chosen image")
         sys.exit()
 
+def saveText(inputText):
+    saveName = filedialog.asksaveasfilename(title='Save key file as',initialfile='key.txt', defaultextension=".txt",
+                                            filetypes=[('Text File',"*.txt")])
+    if saveName is None: # asksaveasfile return `None` if dialog closed with "cancel".
+        noSaveFileChosen=messagebox.askyesno("No save location chosen",
+                                          "No save location chosen would you like retry")
+        if (noSaveFileChosen == True):
+            saveText(inputText)
+        else:
+            sys.exit()
+    else:
+        file=open(saveName,'w')
+        file.write(inputText)
+        file.close()
 
-
+def generateToken(plaintext,key):
+    f = Fernet(key)
+    token = f.encrypt(str.encode(plaintext))
+    print(len(token))
+    token=token.decode()
+    return token
 ######################
 
 #START
@@ -169,11 +196,18 @@ root.withdraw()
 hostImage = selectHost()
 alphaValue = hasAlpha(hostImage)
 ##ASK FOR TEXT
-targetText = askText()
-bitText = encodeText(targetText)
+plaintext = askText()
+key=Fernet.generate_key()
+#Encrypt
+token=generateToken(plaintext,key)
 #Check for size
-checkSize(hostImage, bitText)
+print(len(token))
+checkSize(hostImage, token)
 
+#Encode
+bitText = encodeText(token)
+
+#Embed
 if (alphaValue):
     alphaMask=extractAlpha(hostImage)
     BGRimage=extractBGR(hostImage)
@@ -186,6 +220,9 @@ else:
     combinedImage = hideText(hostImage,bitText)
 ##SAVE TO FILE
 saveImage(combinedImage)
+print(key)
+print(key.decode())
+saveText(key.decode())
 
 ## Kill root window
 root.destroy()

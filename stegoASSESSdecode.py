@@ -3,6 +3,7 @@ import sys
 import tkinter
 from tkinter import filedialog
 from tkinter import messagebox
+from cryptography.fernet import Fernet
 
 #######################
 #Selects host image
@@ -112,16 +113,43 @@ def saveText(inputText):
         file.write(inputText)
         file.close()
 ######################
+def askForKey():
+    keyfile = filedialog.askopenfilename(initialdir = "./", title = "Select Key",
+                                               filetypes = [('Text Files',"*.txt")])
+    #Check whether user chose a file]
+    try:
+        file=open(keyfile, 'r')
+        key=file.read()
+        file.close()
+    except:
+        if (keyfile == ""):
+            noChosenFile=messagebox.askyesno("No key file chosen",
+                                              "No key file chosen, would you like retry")
+            if (noChosenFile == True):
+                text2Hide=askForKey()
+            else:
+                sys.exit()
+        else:
+            sys.exit()
+    key=str.encode(key)
+    return key
 
+def decodeWithKey(ciphertext,key):
+    f = Fernet(key)
+    output=f.decrypt(str.encode(ciphertext))
+    output=output.decode()
+    return output
 #START
 root = tkinter.Tk()
 root.withdraw()
 #######################
 ### SELECT HOST
 coverImage = selectHost()
+key=askForKey()
 ##EXTRACT THE TEXT OUT OF IMAGE
 outputImage = extractText(coverImage)
-outputText=decodeASCII(outputImage)
+ciphertext=decodeASCII(outputImage)
+outputText=decodeWithKey(ciphertext,key)
 saveText(outputText)
 ##
 root.destroy()
